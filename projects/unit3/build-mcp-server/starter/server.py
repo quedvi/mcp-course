@@ -50,10 +50,10 @@ async def analyze_file_changes(base_branch: str = "main", include_diff: bool = T
     
     # NOTE: Git commands run in the server's directory by default!
     # To run in Claude's working directory, use MCP roots:
-    # context = mcp.get_context()
-    # roots_result = await context.session.list_roots()
-    # working_dir = roots_result.roots[0].uri.path
-    # subprocess.run(["git", "diff"], cwd=working_dir)
+    context = mcp.get_context()
+    roots_result = await context.session.list_roots()
+    working_dir = roots_result.roots[0].uri.path
+    subprocess.run(["git", "diff"], cwd=working_dir)
     
     return json.dumps({"error": "Not implemented yet", "hint": "Use subprocess to run git commands"})
 
