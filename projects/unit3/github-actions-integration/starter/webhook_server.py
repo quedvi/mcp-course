@@ -5,7 +5,7 @@ Stores events in a JSON file that the MCP server can read.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from aiohttp import web
 
@@ -19,7 +19,7 @@ async def handle_webhook(request):
         
         # Create event record
         event = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "event_type": request.headers.get("X-GitHub-Event", "unknown"),
             "action": data.get("action"),
             "workflow_run": data.get("workflow_run"),
