@@ -181,13 +181,15 @@ async def get_recent_actions_events(limit: int = 10) -> str:
     Args:
         limit: Maximum number of events to return (default: 10)
     """
-    # TODO: Implement this function
-    # 1. Check if EVENTS_FILE exists
-    # 2. Read the JSON file
-    # 3. Return the most recent events (up to limit)
-    # 4. Return empty list if file doesn't exist
+    # Read events from file
+    if not EVENTS_FILE.exists():
+        return json.dumps([])
     
-    return json.dumps({"message": "TODO: Implement get_recent_actions_events"})
+    with open(EVENTS_FILE, 'r') as f:
+        events = json.load(f)
+    
+    recent = events[-limit:]
+    return json.dumps(recent, indent=2)
 
 
 @mcp.tool()
@@ -197,14 +199,45 @@ async def get_workflow_status(workflow_name: Optional[str] = None) -> str:
     Args:
         workflow_name: Optional specific workflow name to filter by
     """
-    # TODO: Implement this function
-    # 1. Read events from EVENTS_FILE
-    # 2. Filter events for workflow_run events
-    # 3. If workflow_name provided, filter by that name
-    # 4. Group by workflow and show latest status
-    # 5. Return formatted workflow status information
+    # Read events from file
+    if not EVENTS_FILE.exists():
+        return json.dumps([])
     
-    return json.dumps({"message": "TODO: Implement get_workflow_status"})
+    with open(EVENTS_FILE, 'r') as f:
+        events = json.load(f)
+
+    if not events:
+        return json.dumps({"message": "No GitHub Actions events received yet"})
+    
+    workflow_events = [
+        e for e in events 
+        if e.get("workflow_run") is not None
+    ]
+    
+    if not workflow_events:
+        return json.dumps([])
+    
+    if workflow_name:
+        workflow_events = [
+            e for e in workflow_events 
+            if e.get("workflow_run", {}).get("name") == workflow_name
+        ]
+    
+    workflows = {}
+    for event in workflow_events:
+        run = event["workflow_run"]
+        name = run["name"]
+        if name not in workflows or run["updated_at"] > workflows[name]["updated_at"]:
+            workflows[name] = {
+                "name": name,
+                "status": run["status"],
+                "conclusion": run.get("conclusion"),
+                "run_number": run["run_number"],
+                "updated_at": run["updated_at"],
+                "html_url": run["html_url"]
+            }
+    
+    return json.dumps(workflows, indent=2)
 
 
 # ===== Module 2: MCP Prompts =====
@@ -212,40 +245,128 @@ async def get_workflow_status(workflow_name: Optional[str] = None) -> str:
 @mcp.prompt()
 async def analyze_ci_results():
     """Analyze recent CI/CD results and provide insights."""
-    # TODO: Implement this prompt
-    # Return a string with instructions for Claude to:
-    # 1. Use get_recent_actions_events() 
-    # 2. Use get_workflow_status()
-    # 3. Analyze results and provide insights
-    
-    return "TODO: Implement analyze_ci_results prompt"
+    return """Please analyze the recent CI/CD results from GitHub Actions:
+
+1. First, call get_recent_actions_events() to fetch the latest CI/CD events
+2. Then call get_workflow_status() to check current workflow states
+3. Identify any failures or issues that need attention
+4. Provide actionable next steps based on the results
+
+Format your response as:
+## CI/CD Status Summary
+- **Overall Health**: [Good/Warning/Critical]
+- **Failed Workflows**: [List any failures with links]
+- **Successful Workflows**: [List recent successes]
+- **Recommendations**: [Specific actions to take]
+- **Trends**: [Any patterns you notice]"""
 
 
 @mcp.prompt()
 async def create_deployment_summary():
     """Generate a deployment summary for team communication."""
-    # TODO: Implement this prompt
-    # Return a string that guides Claude to create a deployment summary
-    
-    return "TODO: Implement create_deployment_summary prompt"
+    return """Create a deployment summary for team communication:
+
+1. Check workflow status with get_workflow_status()
+2. Look specifically for deployment-related workflows
+3. Note the deployment outcome, timing, and any issues
+
+Format as a concise message suitable for Slack:
+
+🚀 **Deployment Update**
+- **Status**: [✅ Success / ❌ Failed / ⏳ In Progress]
+- **Environment**: [Production/Staging/Dev]
+- **Version/Commit**: [If available from workflow data]
+- **Duration**: [If available]
+- **Key Changes**: [Brief summary if available]
+- **Issues**: [Any problems encountered]
+- **Next Steps**: [Required actions if failed]
+
+Keep it brief but informative for team awareness."""
 
 
 @mcp.prompt()
 async def generate_pr_status_report():
     """Generate a comprehensive PR status report including CI/CD results."""
-    # TODO: Implement this prompt
-    # Return a string that guides Claude to combine code changes with CI/CD status
-    
-    return "TODO: Implement generate_pr_status_report prompt"
+    return """Generate a comprehensive PR status report:
+
+1. Use analyze_file_changes() to understand what changed
+2. Use get_workflow_status() to check CI/CD status
+3. Use suggest_template() to recommend the appropriate PR template
+4. Combine all information into a cohesive report
+
+Create a detailed report with:
+
+## 📋 PR Status Report
+
+### 📝 Code Changes
+- **Files Modified**: [Count by type - .py, .js, etc.]
+- **Change Type**: [Feature/Bug/Refactor/etc.]
+- **Impact Assessment**: [High/Medium/Low with reasoning]
+- **Key Changes**: [Bullet points of main modifications]
+
+### 🔄 CI/CD Status
+- **All Checks**: [✅ Passing / ❌ Failing / ⏳ Running]
+- **Test Results**: [Pass rate, failed tests if any]
+- **Build Status**: [Success/Failed with details]
+- **Code Quality**: [Linting, coverage if available]
+
+### 📌 Recommendations
+- **PR Template**: [Suggested template and why]
+- **Next Steps**: [What needs to happen before merge]
+- **Reviewers**: [Suggested reviewers based on files changed]
+
+### ⚠️ Risks & Considerations
+- [Any deployment risks]
+- [Breaking changes]
+- [Dependencies affected]"""
 
 
 @mcp.prompt()
 async def troubleshoot_workflow_failure():
     """Help troubleshoot a failing GitHub Actions workflow."""
-    # TODO: Implement this prompt
-    # Return a string that guides Claude through troubleshooting steps
-    
-    return "TODO: Implement troubleshoot_workflow_failure prompt"
+    return """Help troubleshoot failing GitHub Actions workflows:
+
+1. Use get_recent_actions_events() to find recent failures
+2. Use get_workflow_status() to see which workflows are failing
+3. Analyze the failure patterns and timing
+4. Provide systematic troubleshooting steps
+
+Structure your response as:
+
+## 🔧 Workflow Troubleshooting Guide
+
+### ❌ Failed Workflow Details
+- **Workflow Name**: [Name of failing workflow]
+- **Failure Type**: [Test/Build/Deploy/Lint]
+- **First Failed**: [When did it start failing]
+- **Failure Rate**: [Intermittent or consistent]
+
+### 🔍 Diagnostic Information
+- **Error Patterns**: [Common error messages or symptoms]
+- **Recent Changes**: [What changed before failures started]
+- **Dependencies**: [External services or resources involved]
+
+### 💡 Possible Causes (ordered by likelihood)
+1. **[Most Likely]**: [Description and why]
+2. **[Likely]**: [Description and why]
+3. **[Possible]**: [Description and why]
+
+### ✅ Suggested Fixes
+**Immediate Actions:**
+- [ ] [Quick fix to try first]
+- [ ] [Second quick fix]
+
+**Investigation Steps:**
+- [ ] [How to gather more info]
+- [ ] [Logs or data to check]
+
+**Long-term Solutions:**
+- [ ] [Preventive measure]
+- [ ] [Process improvement]
+
+### 📚 Resources
+- [Relevant documentation links]
+- [Similar issues or solutions]"""
 
 
 if __name__ == "__main__":

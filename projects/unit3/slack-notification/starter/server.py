@@ -9,8 +9,12 @@ import os
 import subprocess
 from typing import Optional
 from pathlib import Path
+import requests
 
 from mcp.server.fastmcp import FastMCP
+
+from dotenv import load_dotenv
+load_dotenv()
 
 # Initialize the FastMCP server
 mcp = FastMCP("pr-agent-slack")
@@ -245,22 +249,40 @@ async def send_slack_notification(message: str) -> str:
     
     Args:
         message: The message to send to Slack (supports Slack markdown)
+        
+    IMPORTANT: For CI failures, use format_ci_failure_alert prompt first!
+    IMPORTANT: For deployments, use format_ci_success_summary prompt first!
     """
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url:
         return "Error: SLACK_WEBHOOK_URL environment variable not set"
     
     try:
-        # TODO: Import requests library
-        # TODO: Send POST request to webhook_url with JSON payload
-        # TODO: Include the message in the JSON data
-        # TODO: Handle the response and return appropriate status
+        # Prepare the payload with proper Slack formatting
+        payload = {
+            "text": message,
+            "mrkdwn": True
+        }
         
-        # For now, return a placeholder
-        return f"TODO: Implement Slack webhook POST request for message: {message[:50]}..."
+        # Send POST request to Slack webhook
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=10
+        )
         
+        # Check if request was successful
+        if response.status_code == 200:
+            return "✅ Message sent successfully to Slack"
+        else:
+            return f"❌ Failed to send message. Status: {response.status_code}, Response: {response.text}"
+        
+    except requests.exceptions.Timeout:
+        return "❌ Request timed out. Check your internet connection and try again."
+    except requests.exceptions.ConnectionError:
+        return "❌ Connection error. Check your internet connection and webhook URL."
     except Exception as e:
-        return f"Error sending message: {str(e)}"
+        return f"❌ Error sending message: {str(e)}"
 
 
 # ===== New Module 3: Slack Formatting Prompts =====
@@ -270,17 +292,15 @@ async def format_ci_failure_alert():
     """Create a Slack alert for CI/CD failures with rich formatting."""
     return """Format this GitHub Actions failure as a Slack message using ONLY Slack markdown syntax:
 
-❌ *CI Failed* - [Repository Name]
+:rotating_light: *CI Failure Alert* :rotating_light:
 
-> Brief summary of what failed
+A CI workflow has failed:
+*Workflow*: workflow_name
+*Branch*: branch_name
+*Status*: Failed
+*View Details*: <https://github.com/test/repo/actions/runs/123|View Logs>
 
-*Details:*
-• Workflow: `workflow_name`
-• Branch: `branch_name`  
-• Commit: `commit_hash`
-
-*Next Steps:*
-• <https://github.com/test/repo/actions/runs/123|View Action Logs>
+Please check the logs and address any issues.
 
 CRITICAL: Use EXACT Slack link format: <https://full-url|Link Text>
 Examples:
@@ -288,11 +308,12 @@ Examples:
 - WRONG: [Repository](https://github.com/user/repo)
 - WRONG: https://github.com/user/repo
 
-Other Slack formats:
+Slack formatting rules:
 - *text* for bold (NOT **text**)
 - `text` for code
 - > text for quotes
-- • for bullets"""
+- Use simple bullet format without special characters
+- :emoji_name: for emojis"""
 
 
 @mcp.prompt()
@@ -300,16 +321,16 @@ async def format_ci_success_summary():
     """Create a Slack message celebrating successful deployments."""
     return """Format this successful GitHub Actions run as a Slack message using ONLY Slack markdown syntax:
 
-✅ *Deployment Successful* - [Repository Name]
+:white_check_mark: *Deployment Successful* :white_check_mark:
 
-> Brief summary of what was deployed
+Deployment completed successfully for [Repository Name]
 
 *Changes:*
-• Key feature or fix 1
-• Key feature or fix 2
+- Key feature or fix 1
+- Key feature or fix 2
 
 *Links:*
-• <https://github.com/user/repo|View Changes>
+<https://github.com/user/repo|View Changes>
 
 CRITICAL: Use EXACT Slack link format: <https://full-url|Link Text>
 Examples:
@@ -317,11 +338,12 @@ Examples:
 - WRONG: [Repository](https://github.com/user/repo)
 - WRONG: https://github.com/user/repo
 
-Other Slack formats:
+Slack formatting rules:
 - *text* for bold (NOT **text**)
 - `text` for code
 - > text for quotes
-- • for bullets"""
+- Use simple bullet format with - or *
+- :emoji_name: for emojis"""
 
 
 # ===== Prompts from Module 2 (Complete) =====
